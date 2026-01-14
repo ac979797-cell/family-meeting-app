@@ -1,15 +1,13 @@
-import type { NextConfig } from "next";
-import withPWAInit from "@ducanh2912/next-pwa";
-
-const withPWA = withPWAInit({
-  dest: "public",
-  disable: process.env.NODE_ENV === "development",
-  register: true,
-  skipWaiting: true,
-});
-
-const nextConfig: NextConfig = {
-  // 추가적인 설정이 필요하면 여기에 넣으세요.
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  // 에러 메시지에서 권장한 설정 추가
+  experimental: {
+    turbopack: {}, 
+  },
+  // 빌드 시 메모리 부하를 줄이기 위한 추가 옵션 (선택)
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
 };
 
-export default withPWA(nextConfig);
+export default nextConfig;
