@@ -1,8 +1,15 @@
 import type { NextConfig } from "next";
+import withPWAInit from "@ducanh2912/next-pwa";
+
+const withPWA = withPWAInit({
+  dest: "public",
+  disable: process.env.NODE_ENV === "development",
+  register: true,
+  skipWaiting: true,
+});
 
 const nextConfig: NextConfig = {
-  // 123PWA 설정을 완전히 걷어내고 기본 설정만 남깁니다.
-  /* 여기에 설정이 비어있어도 괜찮습니다    */
+  // 추가적인 설정이 필요하면 여기에 넣으세요.
 };
 
-export default nextConfig;
+export default withPWA(nextConfig);
