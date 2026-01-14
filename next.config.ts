@@ -7,14 +7,18 @@ const withPWA = withPWAInit({
   aggressiveFrontEndNavCaching: true,
   reloadOnOnline: true,
   swMinify: true,
-  disable: process.env.NODE_ENV === "development", // 개발 모드에서는 PWA 기능을 끕니다
+  disable: process.env.NODE_ENV === "development",
   workboxOptions: {
     disableDevLogs: true,
   },
 });
 
 const nextConfig: NextConfig = {
-  /* 여기에 나중에 추가할 다른 설정들을 넣으시면 됩니다 */
+  // 에러 메시지에서 제안한 대로 빈 설정을 추가해 빌드 도구 충돌을 방지합니다.
+  experimental: {
+    // turbopack 관련 오류 방지
+  },
+  // 만약 webpack 설정 관련 에러가 지속되면 아래를 추가할 수 있습니다.
 };
 
 export default withPWA(nextConfig);
