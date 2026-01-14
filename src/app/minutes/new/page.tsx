@@ -132,24 +132,29 @@ useEffect(() => {
       </section>
 
       <DynamicSection title="1. 이 주의 이슈" items={issues} 
-        onChange={(idx, val) => updateContent(setIssues, issues, idx, val)}
+        onChange={(idx: number, val: string) => updateContent(setIssues, issues, idx, val)}
         addRow={() => addRow(setIssues, issues)} 
-        deleteRow={(idx) => deleteRow(setIssues, issues, idx)} />
+        deleteRow={(idx: number) => deleteRow(setIssues, issues, idx)} />
+        
+        
+
+
+
 
       <DynamicSection title="2. 이 주의 안건" items={agendas} 
-        onChange={(idx, val) => updateContent(setAgendas, agendas, idx, val)}
+        onChange={(idx: number, val: string) => updateContent(setAgendas, agendas, idx, val)}
         addRow={() => addRow(setAgendas, agendas)} 
-        deleteRow={(idx) => deleteRow(setAgendas, agendas, idx)} />
+        deleteRow={(dx: number) => deleteRow(setAgendas, agendas, idx)} />
 
       <DynamicSection title="3. 그 외 이슈" items={etcIssues} 
-        onChange={(idx, val) => updateContent(setEtcIssues, etcIssues, idx, val)}
+        onChange={(idx: number, val: string) => updateContent(setEtcIssues, etcIssues, idx, val)}
         addRow={() => addRow(setEtcIssues, etcIssues)} 
-        deleteRow={(idx) => deleteRow(setEtcIssues, etcIssues, idx)} />
+        deleteRow={(idx: number) => deleteRow(setEtcIssues, etcIssues, idx)} />
 
       <DynamicSection title="4. 구매 리스트" items={shoppingList} 
-        onChange={(idx, val) => updateContent(setShoppingList, shoppingList, idx, val)}
+        onChange={(idx: number, val: string) => updateContent(setShoppingList, shoppingList, idx, val)}
         addRow={() => addRow(setShoppingList, shoppingList)} 
-        deleteRow={(idx) => deleteRow(setShoppingList, shoppingList, idx)} />
+        deleteRow={(dx: number) => deleteRow(setShoppingList, shoppingList, idx)} />
 
       <section>
         <label className="block text-sm font-bold text-slate-600 mb-2">5. 회의 장소 사진</label>
