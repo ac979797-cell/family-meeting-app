@@ -9,7 +9,7 @@ export default function MinutesListPage() {
 
   useEffect(() => {
     async function fetchMeetings() {
-      // 최신 회의가 위로 오도록 정렬해서 가져오기
+      // 최신 회의가 위로 오도록 정렬해서 가져오기11
       const { data, error } = await supabase
         .from('meetings')
         .select('*')
