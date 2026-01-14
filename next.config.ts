@@ -3,12 +3,16 @@ import withPWAInit from "@ducanh2912/next-pwa";
 
 const withPWA = withPWAInit({
   dest: "public",
-  disable: process.env.NODE_ENV === "development", // 개발 모드에선 끔
+  disable: process.env.NODE_ENV === "development",
 });
 
 const nextConfig: NextConfig = {
-  // 에러 메시지가 요청한 터보팩 설정을 명시적으로 추가
+  // Turbopack 관련 경고를 무시하고 호환성을 높이는 설정
+  transpilePackages: ["@ducanh2912/next-pwa"], 
   experimental: {
+    turbo: {
+      // 에러 메시지에서 제안한 빈 설정
+    },
   },
 };
 
