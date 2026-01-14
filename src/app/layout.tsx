@@ -1,13 +1,15 @@
 import './globals.css'
 import Link from 'next/link'
 // src/app/layout.tsx 상단에 추가
+import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Calendar',
-  description: 'Calendar PWA',
+  title: 'My App',
+  description: 'My PWA App',
   manifest: '/manifest.json',
-  themeColor: '#2563eb',
+  themeColor: '#000000',
 }
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ko">
