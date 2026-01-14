@@ -13,7 +13,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ko">
       <body className="bg-[#F8F9FA] text-[#343A40] min-h-screen antialiased">
-        {/* 상단 헤더: 블러 효과와 부드러운 테두리 */}
+        {/* 상단 헤더: 블러 효과와 부드러운 테두리. */}
         <header className="fixed top-0 left-0 right-0 h-14 bg-white/70 backdrop-blur-xl border-b border-slate-100 flex items-center justify-center z-50">
           <Link href="/minutes">
             <h1 className="font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-purple-600 text-lg tracking-tight">
