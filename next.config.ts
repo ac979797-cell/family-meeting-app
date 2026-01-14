@@ -1,12 +1,8 @@
 // next.config.ts
 import withPWA from '@ducanh2912/next-pwa'
+import type { NextConfig } from 'next'
 
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-}
+const nextConfig: NextConfig = {}
 
 export default withPWA({
   dest: 'public',
