@@ -1,6 +1,5 @@
 // next.config.ts
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const withPWA = require('next-pwa')
+import withPWA from '@ducanh2912/next-pwa'
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -9,7 +8,7 @@ const nextConfig = {
   },
 }
 
-module.exports = withPWA({
+export default withPWA({
   dest: 'public',
   register: true,
   skipWaiting: true,
