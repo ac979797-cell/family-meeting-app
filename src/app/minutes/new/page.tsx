@@ -139,12 +139,12 @@ useEffect(() => {
         
 
 
-
+0
 
       <DynamicSection title="2. 이 주의 안건" items={agendas} 
         onChange={(idx: number, val: string) => updateContent(setAgendas, agendas, idx, val)}
         addRow={() => addRow(setAgendas, agendas)} 
-        deleteRow={(dx: number) => deleteRow(setAgendas, agendas, idx)} />
+        deleteRow={(idx: number) => deleteRow(setAgendas, agendas, idx)} />
 
       <DynamicSection title="3. 그 외 이슈" items={etcIssues} 
         onChange={(idx: number, val: string) => updateContent(setEtcIssues, etcIssues, idx, val)}
