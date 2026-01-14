@@ -1,14 +1,13 @@
 import './globals.css'
 import Link from 'next/link'
 // src/app/layout.tsx 상단에 추가
-export const metadata = {
-  title: "우리 가족 회의",
-  description: "포근한 가족 소통 공간",
-  manifest: "/manifest.json",
-  themeColor: "#6366f1",
-  viewport: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0", 
-};
 
+export const metadata: Metadata = {
+  title: 'Calendar',
+  description: 'Calendar PWA',
+  manifest: '/manifest.json',
+  themeColor: '#2563eb',
+}
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ko">
