@@ -10,7 +10,7 @@ import { supabase } from '../../lib/supabase'
 export default function CalendarPage() {
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState(new Date())
-  const [isModalOpen, setIsModalOpen] = use.State(false)
+  const [isModalOpen, setIsModalOpen] = useState(false)
   
   // 1. 일정 데이터를 담을 상태
   const [schedules, setSchedules] = useState<any[]>([])
