@@ -3,12 +3,19 @@ import Link from 'next/link'
 // src/app/layout.tsx 상단에 추가
 import type { Metadata } from 'next'
 
+
+
+// 1. viewport를 따로 뺍니다.
+export const viewport: Viewport = {
+  themeColor: '#000000',
+};
+
+// 2. metadata에서는 themeColor를 지웁니다.
 export const metadata: Metadata = {
   title: 'My App',
   description: 'My PWA App',
-  manifest: '/manifest.json',.
-  themeColor: '#000000',
-}
+  manifest: '/manifest.json',
+};
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
