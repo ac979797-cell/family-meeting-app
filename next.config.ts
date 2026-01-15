@@ -8,18 +8,15 @@ const withPWA = withPWAInit({
 });
 
 const nextConfig: NextConfig = {
+  // 1. 핵심: 터보팩 엔진에게 빈 설정을 주어 웹팩 충돌 에러를 해결합니다.
+  turbopack: {}, 
+
   typescript: {
     ignoreBuildErrors: true,
   },
   images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: '**',
-      },
-    ],
+    remotePatterns: [{ protocol: 'https', hostname: '**' }],
   },
-  // 빌드 시 메모리 부족(Call retries exceeded) 방지를 위해 추가
   experimental: {
     cpus: 1,
     workerThreads: false,
