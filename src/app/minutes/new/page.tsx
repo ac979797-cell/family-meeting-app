@@ -1,6 +1,8 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '../../../lib/supabase'
+import heic2any from 'heic2any';
+
 
 export default function NewMeetingPage() {
   // --- 상태 관리 ---
@@ -58,16 +60,30 @@ export default function NewMeetingPage() {
   const handleSubmit = async () => {
     if (isSubmitting) return;
     setIsSubmitting(true);
-
+    
     try {
       let publicUrl = '';
       if (imgFile) {
-        const fileName = `location_${Date.now()}`;
-        const { error: uploadError } = await supabase.storage
+        let uploadFile: File | Blob = imgFile;
+        let fileName = imgFile.name;
+         // 1. HEIC 변환 로직
+        if (imgFile.name.toLowerCase().endsWith('.heic')) {
+          const convertedBlob = await heic2any({
+          blob: imgFile,
+          toType: 'image/jpeg',
+          quality: 0.8,
+        });
+        const blob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+        fileName = imgFile.name.replace(/\.[^/.]+$/, ".jpg");
+        uploadFile = new File([blob], fileName, { type: 'image/jpeg' });
+      }
+        
+      const upfileName = `location_${Date.now()}`;
+      const { error: uploadError } = await supabase.storage
           .from('meeting_locations')
-          .upload(fileName, imgFile);
+          .upload(upfileName, uploadFile);
         if (uploadError) throw uploadError;
-        const { data } = supabase.storage.from('meeting_locations').getPublicUrl(fileName);
+        const { data } = supabase.storage.from('meeting_locations').getPublicUrl(upfileName);
         publicUrl = data.publicUrl;
       }
 
