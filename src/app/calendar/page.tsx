@@ -5,7 +5,7 @@ import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, isSa
     , isSameDay, addMonths, subMonths } from 'date-fns'
 import ScheduleModal from '../../components/ScheduleModal'
 import { supabase } from '../../lib/supabase'
-// 수정 후
+// 수정 후 git test
 
 export default function CalendarPage() {
   const [currentMonth, setCurrentMonth] = useState(new Date())
