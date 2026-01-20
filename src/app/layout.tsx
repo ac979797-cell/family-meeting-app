@@ -1,6 +1,7 @@
 import './globals.css'
 import Link from 'next/link'
 import type { Metadata, Viewport } from 'next'
+import PWARegister from './pwa-register';
 
 // 1. Viewport 설정: 모바일 기기에서 앱처럼 보이도록 최적화
 export const viewport: Viewport = {
@@ -58,8 +59,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <span className="text-[11px] font-semibold text-slate-500 group-hover:text-purple-600">달력</span>
           </Link>
         </nav>
-
-        {/* 🚀 서비스 워커(sw.js) 등록 스크립트 */}
+        <PWARegister />
+        
+        {/* 🚀 서비스 워커(sw.js) 등록 스크립트
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -76,7 +78,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               }
             `,
           }}
-        />
+        /> */}
       </body>
     </html>
   )
