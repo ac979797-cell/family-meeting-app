@@ -1,10 +1,12 @@
 'use client'
-import { useState, useEffect } from 'react'
-import { supabase } from '../../../lib/supabase'
-import heic2any from 'heic2any';
 
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation' // 1. router 추가
+import { supabase } from '../../../lib/supabase'
 
 export default function NewMeetingPage() {
+  const router = useRouter() // 2. router 인스턴스 생성
+
   // --- 상태 관리 ---
   const [meetingDate, setMeetingDate] = useState(new Date().toISOString().split('T')[0])
   const [issues, setIssues] = useState([{ content: '' }])
@@ -66,33 +68,44 @@ export default function NewMeetingPage() {
       if (imgFile) {
         let uploadFile: File | Blob = imgFile;
         let fileName = imgFile.name;
-         // 1. HEIC 변환 로직
+
+        // --- 1. HEIC 변환 로직 (window 에러 방지를 위해 dynamic하게 가져옴) ---
         if (imgFile.name.toLowerCase().endsWith('.heic')) {
+          // 브라우저 환경에서만 heic2any를 로드하도록 설정
+          const heic2any = (await import('heic2any')).default;
+          
           const convertedBlob = await heic2any({
-          blob: imgFile,
-          toType: 'image/jpeg',
-          quality: 0.8,
-        });
-        const blob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
-        fileName = imgFile.name.replace(/\.[^/.]+$/, ".jpg");
-        uploadFile = new File([blob], fileName, { type: 'image/jpeg' });
-      }
+            blob: imgFile,
+            toType: 'image/jpeg',
+            quality: 0.8,
+          });
+          const blob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+          fileName = imgFile.name.replace(/\.[^/.]+$/, ".jpg");
+          uploadFile = new File([blob], fileName, { type: 'image/jpeg' });
+        }
         
-      const upfileName = `location_${Date.now()}`;
-      const { error: uploadError } = await supabase.storage
+        // 2. 파일명 생성 시 백틱(`) 사용 및 유니크한 이름 보장
+        const upfileName = `location_${Date.now()}`; 
+        
+        const { error: uploadError } = await supabase.storage
           .from('meeting_locations')
           .upload(upfileName, uploadFile);
+          
         if (uploadError) throw uploadError;
+        
         const { data } = supabase.storage.from('meeting_locations').getPublicUrl(upfileName);
         publicUrl = data.publicUrl;
       }
 
+      // 3. 회의 메인 데이터 저장
       const { data: meetingData, error: meetingError } = await supabase
         .from('meetings')
         .insert({ meeting_date: meetingDate, location_img: publicUrl })
         .select().single();
+      
       if (meetingError) throw meetingError;
 
+      // 4. 상세 항목 데이터 구성
       const allDetails = [
         ...issues.filter(i => i.content).map(i => ({ meeting_id: meetingData.id, item_type: 'ISSUE', content: i.content })),
         ...agendas.filter(a => a.content).map(a => ({ meeting_id: meetingData.id, item_type: 'AGENDA', content: a.content })),
@@ -105,18 +118,24 @@ export default function NewMeetingPage() {
         if (detailsError) throw detailsError;
       }
 
+      // 5. 캘린더 스케줄 추가
       await supabase.from('schedules').insert([
         { 
           title: meetingDate + '_가족회의', 
-          category: "",
+          category: "회의",
           start_at: meetingDate,
-          description: "" 
+          description: "자동 생성된 회의록 일정" 
         }
       ]);
 
       alert('가족 회의록이 저장되었습니다! 🏠');
-      window.location.href = '/minutes';
+      
+      // 6. 페이지 이동 (window.location.href 대신 Next.js router 사용)
+      router.push('/minutes');
+      router.refresh(); // 데이터 갱신 보장
+
     } catch (err: any) {
+      console.error(err);
       alert('에러 발생: ' + err.message);
     } finally {
       setIsSubmitting(false);
