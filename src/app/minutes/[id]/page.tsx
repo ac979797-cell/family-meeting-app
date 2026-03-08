@@ -47,7 +47,7 @@ export default function MeetingDetailPage() {
           <span>{emoji}</span> {title}
         </h3>
         <ul className="space-y-2">
-          {items.map((item, idx) => (
+          {items.map((item: any, idx: number) => (
             <li key={idx} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm text-slate-700">
               {item.content}
             </li>

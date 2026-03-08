@@ -102,10 +102,10 @@ export default function NewMeetingPage() {
         .from('meetings')
         .insert({ meeting_date: meetingDate, location_img: publicUrl })
         .select().single();
-      
+
       if (meetingError) throw meetingError;
 
-      // 4. 상세 항목 데이터 구성
+      // 4. 상세 항목 데이터 구성 및 저장 (순차적 실행으로 동시성 문제 해결)
       const allDetails = [
         ...issues.filter(i => i.content).map(i => ({ meeting_id: meetingData.id, item_type: 'ISSUE', content: i.content })),
         ...agendas.filter(a => a.content).map(a => ({ meeting_id: meetingData.id, item_type: 'AGENDA', content: a.content })),
@@ -113,20 +113,29 @@ export default function NewMeetingPage() {
         ...shoppingList.filter(s => s.content).map(s => ({ meeting_id: meetingData.id, item_type: 'SHOPPING', content: s.content })),
       ];
 
+      // 상세 항목들을 작은 배치로 나누어 순차적으로 저장
       if (allDetails.length > 0) {
-        const { error: detailsError } = await supabase.from('meeting_details').insert(allDetails);
-        if (detailsError) throw detailsError;
+        const batchSize = 5; // 한 번에 5개씩 저장
+        for (let i = 0; i < allDetails.length; i += batchSize) {
+          const batch = allDetails.slice(i, i + batchSize);
+          const { error: detailsError } = await supabase.from('meeting_details').insert(batch);
+          if (detailsError) throw detailsError;
+          // 각 배치 사이에 약간의 지연 추가
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
       }
 
-      // 5. 캘린더 스케줄 추가
-      await supabase.from('schedules').insert([
-        { 
-          title: meetingDate + '_가족회의', 
+      // 5. 캘린더 스케줄 추가 (마지막에 실행)
+      const { error: scheduleError } = await supabase.from('schedules').insert([
+        {
+          title: meetingDate + '_가족회의',
           category: "회의",
           start_at: meetingDate,
-          description: "자동 생성된 회의록 일정" 
+          description: "자동 생성된 회의록 일정"
         }
       ]);
+
+      if (scheduleError) throw scheduleError;
 
       alert('가족 회의록이 저장되었습니다! 🏠');
       
@@ -135,8 +144,24 @@ export default function NewMeetingPage() {
       router.refresh(); // 데이터 갱신 보장
 
     } catch (err: any) {
-      console.error(err);
-      alert('에러 발생: ' + err.message);
+      console.error('회의록 저장 중 에러 발생:', err);
+
+      // 구체적인 에러 메시지 처리
+      let errorMessage = '알 수 없는 오류가 발생했습니다.';
+
+      if (err.message) {
+        if (err.message.includes('write batch') || err.message.includes('compaction')) {
+          errorMessage = '동시 저장 작업 충돌이 발생했습니다. 잠시 후 다시 시도해주세요.';
+        } else if (err.message.includes('duplicate key')) {
+          errorMessage = '이미 존재하는 회의록입니다. 날짜를 확인해주세요.';
+        } else if (err.message.includes('permission')) {
+          errorMessage = '저장 권한이 없습니다. 다시 로그인해주세요.';
+        } else {
+          errorMessage = err.message;
+        }
+      }
+
+      alert('저장 실패: ' + errorMessage);
     } finally {
       setIsSubmitting(false);
     }
