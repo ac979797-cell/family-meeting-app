@@ -18,9 +18,23 @@ export default function MinutesListPage() {
   const [filteredMeetings, setFilteredMeetings] = useState<MeetingWithDetails[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
   const itemsPerPage = 10
+
+  // 검색 실행 함수 (엔터키 또는 버튼 클릭 시)
+  const handleSearch = (query: string) => {
+    setDebouncedSearchQuery(query)
+    setCurrentPage(1)
+  }
+
+  // 엔터키 감지
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleSearch(searchQuery)
+    }
+  }
 
   useEffect(() => {
     async function fetchMeetingsWithDetails() {
@@ -32,7 +46,7 @@ export default function MinutesListPage() {
         .select('*', { count: 'exact' })
         .order('meeting_date', { ascending: false })
 
-      if (searchQuery.trim()) {
+      if (debouncedSearchQuery.trim()) {
         // 검색 시 모든 데이터를 가져와서 클라이언트 사이드에서 필터링
         const { data: allData, error, count } = await query
 
@@ -58,7 +72,7 @@ export default function MinutesListPage() {
         )
 
         // 클라이언트 사이드에서 검색 필터링
-        const queryLower = searchQuery.toLowerCase()
+        const queryLower = debouncedSearchQuery.toLowerCase()
         const filtered = meetingsWithDetails.filter(meeting => {
           if (meeting.meeting_date.toLowerCase().includes(queryLower)) {
             return true
@@ -113,16 +127,16 @@ export default function MinutesListPage() {
       setLoading(false)
     }
     fetchMeetingsWithDetails()
-  }, [currentPage, searchQuery])
+  }, [currentPage, debouncedSearchQuery])
 
   // 검색 기능
   useEffect(() => {
-    if (!searchQuery.trim()) {
+    if (!debouncedSearchQuery.trim()) {
       setFilteredMeetings(allMeetings)
       return
     }
 
-    const query = searchQuery.toLowerCase()
+    const query = debouncedSearchQuery.toLowerCase()
     const filtered = allMeetings.filter(meeting => {
       // 회의 날짜 검색
       if (meeting.meeting_date.toLowerCase().includes(query)) {
@@ -136,13 +150,7 @@ export default function MinutesListPage() {
     })
 
     setFilteredMeetings(filtered)
-  }, [currentPage, searchQuery])
-
-  // 검색어 변경 시 첫 페이지로 리셋
-  const handleSearchChange = (value: string) => {
-    setSearchQuery(value)
-    setCurrentPage(1)
-  }
+  }, [allMeetings, debouncedSearchQuery])
 
   // 페이지네이션 계산
   const totalPages = Math.ceil(totalCount / itemsPerPage)
@@ -160,29 +168,38 @@ export default function MinutesListPage() {
 
       {/* 검색 입력 필드 */}
       <div className="mb-6">
-        <div className="relative">
-          <input
-            type="text"
-            placeholder="회의록 검색... (날짜, 안건, 이슈 등)"
-            value={searchQuery}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            className="w-full px-4 py-3 pl-12 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm"
-          />
-          <div className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400">
-            🔍
+        <div className="relative flex gap-2">
+          <div className="relative flex-1">
+            <input
+              type="text"
+              placeholder="회의록 검색... (날짜, 안건, 이슈 등)"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={handleKeyDown}
+              className="w-full px-4 py-3 pl-12 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm"
+            />
+            <div className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400">
+              🔍
+            </div>
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-4 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                ✕
+              </button>
+            )}
           </div>
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-4 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600"
-            >
-              ✕
-            </button>
-          )}
+          <button
+            onClick={() => handleSearch(searchQuery)}
+            className="px-4 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors"
+          >
+            검색
+          </button>
         </div>
-        {searchQuery && (
+        {debouncedSearchQuery && (
           <p className="text-sm text-slate-500 mt-2">
-            "{searchQuery}" 검색 결과: {totalCount}개 (페이지 {currentPage} / {totalPages})
+            "{debouncedSearchQuery}" 검색 결과: {totalCount}개 (페이지 {currentPage} / {totalPages})
           </p>
         )}
       </div>
@@ -210,10 +227,10 @@ export default function MinutesListPage() {
                   </h3>
 
                   {/* 검색된 내용 미리보기 */}
-                  {searchQuery && (
+                  {debouncedSearchQuery && (
                     <div className="mt-2 space-y-1">
                       {meeting.details
-                        .filter(detail => detail.content.toLowerCase().includes(searchQuery.toLowerCase()))
+                        .filter(detail => detail.content.toLowerCase().includes(debouncedSearchQuery.toLowerCase()))
                         .slice(0, 2) // 최대 2개만 표시
                         .map((detail, idx) => (
                           <div key={idx} className="text-xs text-slate-600 bg-slate-50 px-2 py-1 rounded">
@@ -234,7 +251,7 @@ export default function MinutesListPage() {
                     </div>
                   )}
 
-                  {!searchQuery && (
+                  {!debouncedSearchQuery && (
                     <p className="text-sm text-slate-500 truncate">
                       {meeting.details.length > 0
                         ? `${meeting.details.length}개의 항목`
@@ -250,7 +267,7 @@ export default function MinutesListPage() {
               </div>
             </Link>
           ))
-        ) : searchQuery ? (
+        ) : debouncedSearchQuery ? (
           <div className="text-center py-20 bg-white rounded-2xl border-2 border-dashed border-slate-200">
             <p className="text-slate-400">🔍 검색 결과가 없어요.</p>
             <p className="text-slate-400 text-sm mt-1">다른 검색어로 시도해보세요.</p>
