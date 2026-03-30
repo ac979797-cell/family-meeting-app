@@ -16,6 +16,47 @@ export default function MeetingDetailPage() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
+  // 이미지 압축 함수
+  const compressImage = (file: File | Blob): Promise<Blob> => {
+    return new Promise((resolve) => {
+      const img = new Image()
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        const ctx = canvas.getContext('2d')
+        if (!ctx) {
+          resolve(file as Blob) // fallback
+          return
+        }
+        // 최대 크기 설정 (800px)
+        const maxWidth = 800
+        const maxHeight = 800
+        let { width, height } = img
+        if (width > height) {
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width
+            width = maxWidth
+          }
+        } else {
+          if (height > maxHeight) {
+            width = (width * maxHeight) / height
+            height = maxHeight
+          }
+        }
+        canvas.width = width
+        canvas.height = height
+        ctx.drawImage(img, 0, 0, width, height)
+        canvas.toBlob((blob) => {
+          if (blob) {
+            resolve(blob)
+          } else {
+            resolve(file as Blob) // fallback
+          }
+        }, 'image/jpeg', 0.8)
+      }
+      img.src = URL.createObjectURL(file)
+    })
+  }
+
   useEffect(() => {
     async function fetchFullMeetingData() {
       // 1. 메인 회의 정보 가져오기
@@ -104,6 +145,11 @@ export default function MeetingDetailPage() {
         fileName = newImageFile.name.replace(/\.[^/.]+$/, ".jpg")
         uploadFile = new File([blob], fileName, { type: 'image/jpeg' })
       }
+
+      // 이미지 압축
+      const compressedBlob = await compressImage(uploadFile instanceof File ? uploadFile : new File([uploadFile], fileName, { type: 'image/jpeg' }))
+      uploadFile = compressedBlob
+      fileName = `compressed_${Date.now()}.jpg`
 
       const upfileName = `location_${Date.now()}`
       const { error: uploadError } = await supabase.storage
