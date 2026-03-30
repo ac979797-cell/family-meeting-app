@@ -1,6 +1,6 @@
 {
-  "name": "My PWA",
-  "short_name": "PWA",
+  "name": "L&C",
+  "short_name": "L&C",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
