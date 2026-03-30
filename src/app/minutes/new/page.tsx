@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation' // 1. router 추가
 import { supabase } from '../../../lib/supabase'
 
@@ -15,6 +15,9 @@ export default function NewMeetingPage() {
   const [shoppingList, setShoppingList] = useState([{ content: '' }])
   const [imgFile, setImgFile] = useState<File | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isCameraMode, setIsCameraMode] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
 
   // --- 1. 이전 데이터 로드 ---
   useEffect(() => {
@@ -48,6 +51,51 @@ export default function NewMeetingPage() {
     }
     fetchLastMeeting();
   }, []);
+
+  // 카메라 시작
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true })
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+      }
+      setIsCameraMode(true)
+    } catch (err) {
+      alert('카메라 접근에 실패했습니다.')
+      console.error(err)
+    }
+  }
+
+  // 카메라 정지
+  const stopCamera = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream
+      stream.getTracks().forEach(track => track.stop())
+      videoRef.current.srcObject = null
+    }
+    setIsCameraMode(false)
+  }
+
+  // 사진 촬영
+  const capturePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const canvas = canvasRef.current
+      const video = videoRef.current
+      canvas.width = video.videoWidth
+      canvas.height = video.videoHeight
+      const ctx = canvas.getContext('2d')
+      if (ctx) {
+        ctx.drawImage(video, 0, 0)
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const file = new File([blob], `photo_${Date.now()}.jpg`, { type: 'image/jpeg' })
+            setImgFile(file)
+            stopCamera()
+          }
+        }, 'image/jpeg', 0.8)
+      }
+    }
+  }
 
   // --- 2. 로우 추가/삭제 핸들러 ---
   const addRow = (setter: any, items: any) => setter([...items, { content: '' }])
@@ -203,12 +251,58 @@ export default function NewMeetingPage() {
 
       <section>
         <label className="block text-sm font-bold text-slate-700 mb-2">5. 회의 장소 사진</label>
-        <input 
-          type="file" 
-          accept="image/*" 
-          onChange={(e) => setImgFile(e.target.files?.[0] || null)} 
-          className="block w-full text-sm text-black file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" 
-        />
+        
+        {/* 사진 미리보기 */}
+        {imgFile && (
+          <div className="mb-4 rounded-3xl overflow-hidden shadow-lg aspect-video">
+            <img src={URL.createObjectURL(imgFile)} alt="선택된 사진" className="w-full h-full object-cover" />
+          </div>
+        )}
+
+        {/* 카메라 모드 */}
+        {isCameraMode ? (
+          <div className="space-y-4">
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              className="w-full rounded-3xl shadow-lg"
+            />
+            <canvas ref={canvasRef} className="hidden" />
+            <div className="flex gap-2">
+              <button
+                onClick={capturePhoto}
+                className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold"
+              >
+                📸 촬영
+              </button>
+              <button
+                onClick={stopCamera}
+                className="flex-1 bg-slate-600 text-white py-3 rounded-xl font-bold"
+              >
+                취소
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* 사진 업로드 */}
+            <input 
+              type="file" 
+              accept="image/*" 
+              onChange={(e) => setImgFile(e.target.files?.[0] || null)} 
+              className="block w-full text-sm text-black file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" 
+            />
+
+            {/* 카메라 촬영 버튼 */}
+            <button
+              onClick={startCamera}
+              className="w-full bg-green-600 text-white py-3 rounded-xl font-bold"
+            >
+              📷 카메라로 촬영
+            </button>
+          </div>
+        )}
       </section>
 
       <button 
