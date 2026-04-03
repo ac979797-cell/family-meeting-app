@@ -1,6 +1,8 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '@/lib/auth-context'
+import { ProtectedRoute } from '@/components/ProtectedRoute'
 import Link from 'next/link'
 
 interface MeetingWithDetails {
@@ -13,7 +15,8 @@ interface MeetingWithDetails {
   }>
 }
 
-export default function MinutesListPage() {
+function MinutesListPageContent() {
+  const { familyId, familyName, loading: authLoading } = useAuth()
   const [allMeetings, setAllMeetings] = useState<MeetingWithDetails[]>([])
   const [filteredMeetings, setFilteredMeetings] = useState<MeetingWithDetails[]>([])
   const [loading, setLoading] = useState(true)
@@ -38,12 +41,18 @@ export default function MinutesListPage() {
 
   useEffect(() => {
     async function fetchMeetingsWithDetails() {
+      if (!familyId) {
+        setLoading(false)
+        return
+      }
+
       setLoading(true)
 
       // 검색어가 있는 경우와 없는 경우를 구분하여 처리
       let query = supabase
         .from('meetings')
         .select('*', { count: 'exact' })
+        .eq('family_id', familyId)
         .order('meeting_date', { ascending: false })
 
       if (debouncedSearchQuery.trim()) {
@@ -160,7 +169,10 @@ export default function MinutesListPage() {
   return (
     <div className="p-4 pb-24">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-slate-800">📋 회의록 목록</h2>
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800">📋 회의록 목록</h2>
+          {familyName && <p className="text-sm text-slate-500 mt-1">👨‍👩‍👧‍👦 {familyName}</p>}
+        </div>
         <Link href="/minutes/new" className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-md">
           새로 쓰기
         </Link>
@@ -348,5 +360,13 @@ export default function MinutesListPage() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function MinutesListPage() {
+  return (
+    <ProtectedRoute>
+      <MinutesListPageContent />
+    </ProtectedRoute>
   )
 }

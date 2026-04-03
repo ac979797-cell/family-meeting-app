@@ -1,11 +1,14 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation' // 1. router 추가
+import { useRouter } from 'next/navigation'
 import { supabase } from '../../../lib/supabase'
+import { useAuth } from '@/lib/auth-context'
+import { ProtectedRoute } from '@/components/ProtectedRoute'
 
-export default function NewMeetingPage() {
-  const router = useRouter() // 2. router 인스턴스 생성
+function NewMeetingPageContent() {
+  const router = useRouter()
+  const { familyId, loading: authLoading } = useAuth()
 
   // --- 상태 관리 ---
   const [meetingDate, setMeetingDate] = useState(new Date().toISOString().split('T')[0])
@@ -22,9 +25,12 @@ export default function NewMeetingPage() {
   // --- 1. 이전 데이터 로드 ---
   useEffect(() => {
     async function fetchLastMeeting() {
+      if (!familyId) return
+
       const { data: lastMeeting } = await supabase
         .from('meetings')
         .select('id')
+        .eq('family_id', familyId)
         .order('created_at', { ascending: false })
         .limit(1)
         .single();
@@ -50,7 +56,7 @@ export default function NewMeetingPage() {
       }
     }
     fetchLastMeeting();
-  }, []);
+  }, [familyId]);
 
   // 카메라 시작
   const startCamera = async () => {
@@ -148,7 +154,11 @@ export default function NewMeetingPage() {
       // 3. 회의 메인 데이터 저장
       const { data: meetingData, error: meetingError } = await supabase
         .from('meetings')
-        .insert({ meeting_date: meetingDate, location_img: publicUrl })
+        .insert({ 
+          meeting_date: meetingDate, 
+          location_img: publicUrl,
+          family_id: familyId
+        })
         .select().single();
 
       if (meetingError) throw meetingError;
@@ -337,5 +347,13 @@ function DynamicSection({ title, items, onChange, addRow, deleteRow }: any) {
         </div>
       ))}
     </section>
+  )
+}
+
+export default function NewMeetingPage() {
+  return (
+    <ProtectedRoute>
+      <NewMeetingPageContent />
+    </ProtectedRoute>
   )
 }
