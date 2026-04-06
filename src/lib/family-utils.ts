@@ -1,3 +1,4 @@
+import type { User } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 
 /**
@@ -9,19 +10,19 @@ export async function createFamily(
 ): Promise<{ familyId: string; inviteCode: string } | null> {
   try {
     const inviteCode = generateInviteCode()
+    const familyId = crypto.randomUUID()
 
     // 1. 가족 생성
-    const { data: familyData, error: familyError } = await supabase
+    const { error: familyError } = await supabase
       .from('families')
       .insert([
         {
+          id: familyId,
           name: familyName,
           invite_code: inviteCode,
           created_by: userId,
         },
       ])
-      .select()
-      .single()
 
     if (familyError) throw familyError
 
@@ -30,21 +31,24 @@ export async function createFamily(
       .from('family_members')
       .insert([
         {
-          family_id: familyData.id,
+          family_id: familyId,
           user_id: userId,
           role: 'admin',
         },
       ])
 
-    if (memberError) throw memberError
+    if (memberError) {
+      await supabase.from('families').delete().eq('id', familyId)
+      throw memberError
+    }
 
     return {
-      familyId: familyData.id,
-      inviteCode: inviteCode,
+      familyId,
+      inviteCode,
     }
   } catch (error) {
     console.error('가족 생성 오류:', error)
-    return null
+    throw error
   }
 }
 
@@ -57,13 +61,16 @@ export async function joinFamilyWithCode(
 ): Promise<string | null> {
   try {
     // 1. 초대 코드로 가족 찾기
-    const { data: familyData, error: familyError } = await supabase
-      .from('families')
-      .select('id')
-      .eq('invite_code', inviteCode)
-      .single()
+    const { data: familyRows, error: familyError } = await supabase.rpc(
+      'find_family_by_invite_code',
+      {
+        p_invite_code: inviteCode.trim().toUpperCase(),
+      }
+    )
 
-    if (familyError || !familyData) {
+    const familyId = Array.isArray(familyRows) ? familyRows[0]?.id : null
+
+    if (familyError || !familyId) {
       throw new Error('유효하지 않은 초대 코드입니다.')
     }
 
@@ -71,9 +78,9 @@ export async function joinFamilyWithCode(
     const { data: existingMember } = await supabase
       .from('family_members')
       .select('id')
-      .eq('family_id', familyData.id)
+      .eq('family_id', familyId)
       .eq('user_id', userId)
-      .single()
+      .maybeSingle()
 
     if (existingMember) {
       throw new Error('이미 이 가족에 속해있습니다.')
@@ -84,7 +91,7 @@ export async function joinFamilyWithCode(
       .from('family_members')
       .insert([
         {
-          family_id: familyData.id,
+          family_id: familyId,
           user_id: userId,
           role: 'member',
         },
@@ -92,7 +99,7 @@ export async function joinFamilyWithCode(
 
     if (joinError) throw joinError
 
-    return familyData.id
+    return familyId
   } catch (error) {
     console.error('가족 참여 오류:', error)
     throw error
@@ -125,10 +132,66 @@ export async function createUserProfile(
 }
 
 /**
+ * 로그인 사용자의 프로필이 없으면 자동 생성
+ */
+export async function ensureUserProfile(user: User): Promise<string> {
+  const displayName =
+    user.user_metadata?.name ||
+    user.user_metadata?.nickname ||
+    user.email?.split('@')[0] ||
+    '가족 구성원'
+
+  const avatarUrl =
+    user.user_metadata?.avatar_url ||
+    user.user_metadata?.picture ||
+    null
+
+  const { error } = await supabase.from('profiles').upsert(
+    {
+      user_id: user.id,
+      display_name: displayName,
+      avatar_url: avatarUrl,
+    },
+    {
+      onConflict: 'user_id',
+    }
+  )
+
+  if (error) {
+    console.error('프로필 보정 오류:', error)
+  }
+
+  return displayName
+}
+
+/**
+ * 로그인 사용자를 위한 기본 가족을 자동 보장
+ */
+export async function ensureUserFamily(
+  userId: string,
+  displayName: string
+): Promise<string | null> {
+  const { data: existingMember } = await supabase
+    .from('family_members')
+    .select('family_id')
+    .eq('user_id', userId)
+    .limit(1)
+    .maybeSingle()
+
+  if (existingMember?.family_id) {
+    return existingMember.family_id
+  }
+
+  const defaultFamilyName = displayName ? `${displayName} 가족` : '우리 가족'
+  const result = await createFamily(defaultFamilyName, userId)
+  return result?.familyId ?? null
+}
+
+/**
  * 6자리 무작위 초대 코드 생성
  */
 function generateInviteCode(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
   let code = ''
   for (let i = 0; i < 6; i++) {
     code += chars.charAt(Math.floor(Math.random() * chars.length))

@@ -2,13 +2,16 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { User } from '@supabase/supabase-js'
 import { supabase } from './supabase'
+import { ensureUserProfile } from './family-utils'
 
 interface AuthContextType {
   user: User | null
   loading: boolean
   familyId: string | null
   familyName: string | null
+  inviteCode: string | null
   displayName: string | null
+  refreshFamilyInfo: () => Promise<void>
   signOut: () => Promise<void>
 }
 
@@ -19,6 +22,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [familyId, setFamilyId] = useState<string | null>(null)
   const [familyName, setFamilyName] = useState<string | null>(null)
+  const [inviteCode, setInviteCode] = useState<string | null>(null)
   const [displayName, setDisplayName] = useState<string | null>(null)
 
   useEffect(() => {
@@ -29,7 +33,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(authUser)
 
       if (authUser) {
-        await loadUserFamilyInfo(authUser.id)
+        await loadUserFamilyInfo(authUser)
+      } else {
+        setFamilyId(null)
+        setFamilyName(null)
+        setInviteCode(null)
+        setDisplayName(null)
       }
 
       setLoading(false)
@@ -43,7 +52,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const authUser = session?.user ?? null
         setUser(authUser)
         if (authUser) {
-          loadUserFamilyInfo(authUser.id)
+          void loadUserFamilyInfo(authUser)
+        } else {
+          setFamilyId(null)
+          setFamilyName(null)
+          setInviteCode(null)
+          setDisplayName(null)
         }
       }
     )
@@ -53,39 +67,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  async function loadUserFamilyInfo(userId: string) {
+  async function loadUserFamilyInfo(authUser: User) {
     try {
-      // 1. 사용자 프로필 조회
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('display_name')
-        .eq('user_id', userId)
-        .single()
+      const ensuredDisplayName = await ensureUserProfile(authUser)
+      setDisplayName(ensuredDisplayName)
 
-      setDisplayName(profileData?.display_name ?? null)
-
-      // 2. 사용자가 속한 첫 번째 가족 조회
       const { data: memberData } = await supabase
         .from('family_members')
         .select('family_id')
-        .eq('user_id', userId)
+        .eq('user_id', authUser.id)
         .limit(1)
-        .single()
+        .maybeSingle()
 
-      if (memberData) {
+      if (memberData?.family_id) {
         setFamilyId(memberData.family_id)
 
-        // 3. 가족 이름 조회
         const { data: familyData } = await supabase
           .from('families')
-          .select('name')
+          .select('name, invite_code')
           .eq('id', memberData.family_id)
-          .single()
+          .maybeSingle()
 
         setFamilyName(familyData?.name ?? null)
+        setInviteCode(familyData?.invite_code ?? null)
+      } else {
+        setFamilyId(null)
+        setFamilyName(null)
+        setInviteCode(null)
       }
     } catch (error) {
       console.error('가족 정보 로드 오류:', error)
+    }
+  }
+
+  const refreshFamilyInfo = async () => {
+    const { data } = await supabase.auth.getUser()
+    if (data.user) {
+      await loadUserFamilyInfo(data.user)
     }
   }
 
@@ -94,12 +112,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null)
     setFamilyId(null)
     setFamilyName(null)
+    setInviteCode(null)
     setDisplayName(null)
   }
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, familyId, familyName, displayName, signOut }}
+      value={{ user, loading, familyId, familyName, inviteCode, displayName, refreshFamilyInfo, signOut }}
     >
       {children}
     </AuthContext.Provider>

@@ -4,11 +4,11 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { createUserProfile } from '@/lib/family-utils'
 import { FamilySetupModal } from '@/components/FamilySetupModal'
+import { useAuth } from '@/lib/auth-context'
 
 export default function LoginPage() {
   const router = useRouter()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const { refreshFamilyInfo } = useAuth()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [showFamilySetup, setShowFamilySetup] = useState(false)
@@ -16,7 +16,6 @@ export default function LoginPage() {
   const [newUserDisplayName, setNewUserDisplayName] = useState('')
 
   useEffect(() => {
-    // Kakao SDK 로드
     const script = document.createElement('script')
     script.src = 'https://developers.kakao.com/sdk/js/kakao.min.js'
     script.async = true
@@ -25,10 +24,10 @@ export default function LoginPage() {
     script.onload = () => {
       if (window.Kakao) {
         const kakaoKey = process.env.NEXT_PUBLIC_KAKAO_JS_KEY
-        if (kakaoKey) {
+        if (kakaoKey && !window.Kakao.isInitialized()) {
           window.Kakao.init(kakaoKey)
           console.log('Kakao SDK initialized with key:', kakaoKey.substring(0, 8) + '...')
-        } else {
+        } else if (!kakaoKey) {
           console.error('NEXT_PUBLIC_KAKAO_JS_KEY is not set')
         }
       }
@@ -36,61 +35,9 @@ export default function LoginPage() {
 
     script.onerror = () => {
       console.error('Failed to load Kakao SDK')
+      setError('Kakao SDK를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.')
     }
   }, [])
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
-    setLoading(true)
-
-    try {
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
-
-      if (signInError) {
-        setError(signInError.message)
-        setLoading(false)
-        return
-      }
-
-      // 로그인 성공
-      router.push('/minutes')
-    } catch (err) {
-      setError('로그인에 실패했습니다.')
-      setLoading(false)
-    }
-  }
-
-  const handleSignUp = async () => {
-    setError('')
-    setLoading(true)
-
-    try {
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        },
-      })
-
-      if (signUpError) {
-        setError(signUpError.message)
-        setLoading(false)
-        return
-      }
-
-      setError('')
-      alert('회원가입 확인 이메일을 보냈습니다. 이메일을 확인해주세요.')
-      setLoading(false)
-    } catch (err) {
-      setError('회원가입에 실패했습니다.')
-      setLoading(false)
-    }
-  }
 
   const handleKakaoLogin = () => {
     if (!window.Kakao) {
@@ -106,115 +53,109 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
 
-    console.log('Starting Kakao login...')
-
     window.Kakao.Auth.login({
-      success: async (authObj: any) => {
-        console.log('Kakao auth success:', authObj)
+      scope: 'profile_nickname',
+      success: async () => {
         window.Kakao.API.request({
           url: '/v2/user/me',
           success: async (response: any) => {
-            console.log('Kakao user info:', response)
             const kakaoId = response.id
-            const nickname = response.kakao_account?.profile?.nickname || 'User'
-            const profileImage = response.kakao_account?.profile?.profile_image_url
+            const nickname =
+              response.kakao_account?.profile?.nickname ||
+              response.properties?.nickname ||
+              'User'
+            const profileImage =
+              response.kakao_account?.profile?.profile_image_url ||
+              response.properties?.profile_image ||
+              undefined
 
             try {
-              // Supabase에서 ID/PW sign up (Kakao ID 기반)
-              const { data: signUpData, error: signUpError } =
-                await supabase.auth.signUp({
-                  email: `kakao_${kakaoId}@kakao.local`,
-                  password: `kakao_${kakaoId}`, // 내부 용도 비밀번호
-                  options: {
-                    data: {
-                      provider: 'kakao',
-                      kakao_id: kakaoId,
-                      display_name: nickname,
-                    },
-                  },
-                })
+              const email = `kakao_${kakaoId}@kakao.local`
+              const password = `kakao_${kakaoId}`
 
-              if (signUpError && signUpError.message !== 'User already registered') {
-                console.error('Supabase signup error:', signUpError)
+              const { error: signUpError } = await supabase.auth.signUp({
+                email,
+                password,
+                options: {
+                  data: {
+                    provider: 'kakao',
+                    kakao_id: kakaoId,
+                    display_name: nickname,
+                  },
+                },
+              })
+
+              if (
+                signUpError &&
+                !signUpError.message.toLowerCase().includes('already registered')
+              ) {
                 throw signUpError
               }
 
-              // 로그인 수행
               const { data: loginData, error: loginError } =
                 await supabase.auth.signInWithPassword({
-                  email: `kakao_${kakaoId}@kakao.local`,
-                  password: `kakao_${kakaoId}`,
+                  email,
+                  password,
                 })
 
               if (loginError) {
-                console.error('Supabase login error:', loginError)
                 throw loginError
               }
 
               const user = loginData.session?.user
               if (!user) throw new Error('로그인 실패')
 
-              console.log('Supabase login success:', user.id)
-
-              // 프로필 생성 (첫 로그인인 경우)
               const { data: existingProfile } = await supabase
                 .from('profiles')
                 .select('id')
                 .eq('user_id', user.id)
-                .single()
+                .maybeSingle()
 
               if (!existingProfile) {
-                console.log('Creating user profile...')
                 await createUserProfile(user.id, nickname, profileImage)
               }
 
-              // 가족 그룹 확인
               const { data: familyMember } = await supabase
                 .from('family_members')
                 .select('id')
                 .eq('user_id', user.id)
                 .limit(1)
-                .single()
+                .maybeSingle()
 
               if (familyMember) {
-                // 이미 가족에 속함
-                console.log('User already in family, redirecting to minutes')
                 router.push('/minutes')
               } else {
-                // 가족 설정 필요
-                console.log('User needs family setup')
                 setNewUserId(user.id)
                 setNewUserDisplayName(nickname)
                 setShowFamilySetup(true)
               }
-
-              setLoading(false)
             } catch (err) {
-              console.error('Supabase error:', err)
-              setError(
-                err instanceof Error ? err.message : 'Supabase 로그인 실패'
-              )
+              console.error('Kakao/Supabase login error:', err)
+              setError(err instanceof Error ? err.message : '로그인에 실패했습니다.')
+            } finally {
               setLoading(false)
             }
           },
-          fail: (error: any) => {
-            console.error('Kakao user info request failed:', error)
-            setError('Kakao 사용자 정보를 가져올 수 없습니다.')
+          fail: (apiError: any) => {
+            console.error('Kakao user info request failed:', apiError)
+            setError('Kakao 사용자 정보를 가져오지 못했습니다.')
             setLoading(false)
           },
         })
       },
-      fail: (error: any) => {
-        console.error('Kakao login failed:', error)
-        setError('Kakao 로그인이 취소되었습니다.')
+      fail: (loginError: any) => {
+        console.error('Kakao login failed:', loginError)
+        setError('Kakao 로그인이 취소되었거나 실패했습니다.')
         setLoading(false)
       },
     })
   }
 
-  const handleFamilySetupComplete = () => {
+  const handleFamilySetupComplete = async () => {
+    await refreshFamilyInfo()
     setShowFamilySetup(false)
     router.push('/minutes')
+    router.refresh()
   }
 
   return (
@@ -229,22 +170,19 @@ export default function LoginPage() {
 
       <div className="flex items-center justify-center min-h-screen p-4">
         <div className="w-full max-w-sm">
-          {/* 로고 */}
           <div className="text-center mb-8">
             <h1 className="font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-purple-600 text-3xl mb-2">
               🏠 우리 가족 회의
             </h1>
-            <p className="text-slate-500 text-sm">회의록 앱에 로그인하세요</p>
+            <p className="text-slate-500 text-sm">카카오 계정으로 회의록 앱에 로그인하세요</p>
           </div>
 
-          {/* 에러 메시지 */}
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
               {error}
             </div>
           )}
 
-          {/* Kakao 로그인 */}
           <button
             onClick={handleKakaoLogin}
             disabled={loading}
@@ -254,7 +192,6 @@ export default function LoginPage() {
             {loading ? 'Kakao 로그인 중...' : 'Kakao로 로그인'}
           </button>
 
-          {/* 디버깅 버튼 (개발용) */}
           {process.env.NODE_ENV === 'development' && (
             <button
               onClick={() => {
@@ -269,66 +206,9 @@ export default function LoginPage() {
             </button>
           )}
 
-          {/* 구분선 */}
-          <div className="flex items-center gap-3 mb-4">
-            <div className="flex-1 border-t border-slate-300"></div>
-            <span className="text-xs text-slate-500">또는</span>
-            <div className="flex-1 border-t border-slate-300"></div>
-          </div>
-
-          {/* 로그인 폼 */}
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                이메일
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="your@email.com"
-                required
-                className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                disabled={loading}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                비밀번호
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-                className="w-full px-4 py-3 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                disabled={loading}
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg transition-shadow disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? '로그인 중...' : '로그인'}
-            </button>
-          </form>
-
-          {/* 회원가입 */}
-          <div className="mt-6 pt-6 border-t border-slate-200">
-            <p className="text-center text-slate-600 text-sm mb-3">
-              계정이 없으신가요?
-            </p>
-            <button
-              onClick={handleSignUp}
-              disabled={loading || !email || !password}
-              className="w-full py-3 bg-slate-100 text-slate-700 font-semibold rounded-lg hover:bg-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? '진행 중...' : '회원가입'}
-            </button>
+          <div className="mb-4 rounded-lg bg-yellow-50 border border-yellow-200 px-3 py-3 text-xs text-yellow-800 leading-5">
+            처음에 사용하시던 Kakao 로그인 흐름으로 복구했습니다.<br />
+            가족별 회의록 접근 제어는 그대로 유지됩니다.
           </div>
         </div>
       </div>

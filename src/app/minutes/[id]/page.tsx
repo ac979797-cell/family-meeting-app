@@ -2,9 +2,12 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '../../../lib/supabase'
+import { useAuth } from '@/lib/auth-context'
+import { ProtectedRoute } from '@/components/ProtectedRoute'
 
-export default function MeetingDetailPage() {
+function MeetingDetailPageContent() {
   const { id } = useParams()
+  const { familyId, loading: authLoading } = useAuth()
   const router = useRouter()
   const [meeting, setMeeting] = useState<any>(null)
   const [details, setDetails] = useState<any[]>([])
@@ -59,26 +62,54 @@ export default function MeetingDetailPage() {
 
   useEffect(() => {
     async function fetchFullMeetingData() {
-      // 1. 메인 회의 정보 가져오기
-      const { data: meetingData } = await supabase
+      if (authLoading) return
+
+      const meetingId = Array.isArray(id) ? id[0] : id
+
+      if (!meetingId || !familyId) {
+        setMeeting(null)
+        setDetails([])
+        setLoading(false)
+        return
+      }
+
+      const { data: meetingData, error: meetingError } = await supabase
         .from('meetings')
         .select('*')
-        .eq('id', id)
-        .single()
+        .eq('id', meetingId)
+        .eq('family_id', familyId)
+        .maybeSingle()
 
-      // 2. 해당 회의의 모든 상세 항목 가져오기
-      const { data: detailsData } = await supabase
+      if (meetingError) {
+        console.error('회의 상세 조회 오류:', meetingError)
+        setLoading(false)
+        return
+      }
+
+      if (!meetingData) {
+        setMeeting(null)
+        setDetails([])
+        setLoading(false)
+        return
+      }
+
+      const { data: detailsData, error: detailsError } = await supabase
         .from('meeting_details')
         .select('*')
-        .eq('meeting_id', id)
+        .eq('meeting_id', meetingId)
         .order('sort_order', { ascending: true })
+
+      if (detailsError) {
+        console.error('회의 상세 항목 조회 오류:', detailsError)
+      }
 
       setMeeting(meetingData)
       setDetails(detailsData || [])
       setLoading(false)
     }
-    if (id) fetchFullMeetingData()
-  }, [id])
+
+    void fetchFullMeetingData()
+  }, [id, familyId, authLoading])
 
   // 카메라 시작
   const startCamera = async () => {
@@ -161,11 +192,17 @@ export default function MeetingDetailPage() {
       const { data } = supabase.storage.from('meeting_locations').getPublicUrl(upfileName)
       const publicUrl = data.publicUrl
 
+      const meetingId = Array.isArray(id) ? id[0] : id
+      if (!meetingId || !familyId) {
+        throw new Error('가족 정보가 없어 사진을 수정할 수 없습니다.')
+      }
+
       // 회의 데이터 업데이트
       const { error: updateError } = await supabase
         .from('meetings')
         .update({ location_img: publicUrl })
-        .eq('id', id)
+        .eq('id', meetingId)
+        .eq('family_id', familyId)
 
       if (updateError) throw updateError
 
@@ -182,8 +219,8 @@ export default function MeetingDetailPage() {
     }
   }
 
-  if (loading) return <div className="p-10 text-center">기록 읽어오는 중...</div>
-  if (!meeting) return <div className="p-10 text-center">기록을 찾을 수 없습니다.</div>
+  if (authLoading || loading) return <div className="p-10 text-center">기록 읽어오는 중...</div>
+  if (!meeting) return <div className="p-10 text-center">가족 회의록을 찾을 수 없습니다.</div>
 
   // 타입별로 데이터 분류하기
   const renderSection = (title: string, type: string, emoji: string) => {
@@ -335,7 +372,24 @@ export default function MeetingDetailPage() {
         <button 
           onClick={async () => {
             if(confirm('정말 삭제하시겠습니까?')) {
-              await supabase.from('meetings').delete().eq('id', id)
+              const meetingId = Array.isArray(id) ? id[0] : id
+
+              if (!meetingId || !familyId) {
+                alert('삭제 권한을 확인할 수 없습니다.')
+                return
+              }
+
+              const { error } = await supabase
+                .from('meetings')
+                .delete()
+                .eq('id', meetingId)
+                .eq('family_id', familyId)
+
+              if (error) {
+                alert('삭제에 실패했습니다: ' + error.message)
+                return
+              }
+
               router.push('/minutes')
             }
           }}
@@ -345,5 +399,13 @@ export default function MeetingDetailPage() {
         </button>
       )}
     </div>
+  )
+}
+
+export default function MeetingDetailPage() {
+  return (
+    <ProtectedRoute>
+      <MeetingDetailPageContent />
+    </ProtectedRoute>
   )
 }

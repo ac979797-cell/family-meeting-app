@@ -25,8 +25,13 @@ export function FamilySetupModal({
     setError('')
     setLoading(true)
 
-    const result = await createFamily(familyName, userId)
-    if (result) {
+    try {
+      const result = await createFamily(familyName, userId)
+
+      if (!result) {
+        throw new Error('가족 생성에 실패했습니다. Supabase 설정을 확인해주세요.')
+      }
+
       setSuccessMessage(
         `✨ 가족 "${familyName}"이 생성되었습니다!\n\n초대 코드: ${result.inviteCode}\n\n이 코드를 공유하여 가족 구성원을 초대하세요.`
       )
@@ -34,8 +39,13 @@ export function FamilySetupModal({
         setSuccessMessage('')
         onSuccess()
       }, 2000)
-    } else {
-      setError('가족 생성에 실패했습니다. 다시 시도해주세요.')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '가족 생성에 실패했습니다. 다시 시도해주세요.'
+      setError(
+        message.toLowerCase().includes('row-level security')
+          ? '가족 생성 권한이 없습니다. Supabase SQL Editor에서 `migrations.sql`을 다시 실행해주세요.'
+          : message
+      )
       setLoading(false)
     }
   }
@@ -53,7 +63,12 @@ export function FamilySetupModal({
         onSuccess()
       }, 2000)
     } catch (err) {
-      setError(err instanceof Error ? err.message : '실패했습니다.')
+      const message = err instanceof Error ? err.message : '실패했습니다.'
+      setError(
+        message.toLowerCase().includes('row-level security')
+          ? '가족 참여 권한이 없습니다. Supabase SQL Editor에서 `migrations.sql`을 다시 실행해주세요.'
+          : message
+      )
       setLoading(false)
     }
   }

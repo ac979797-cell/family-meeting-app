@@ -41,7 +41,14 @@ function MinutesListPageContent() {
 
   useEffect(() => {
     async function fetchMeetingsWithDetails() {
+      if (authLoading) {
+        return
+      }
+
       if (!familyId) {
+        setAllMeetings([])
+        setFilteredMeetings([])
+        setTotalCount(0)
         setLoading(false)
         return
       }
@@ -136,7 +143,7 @@ function MinutesListPageContent() {
       setLoading(false)
     }
     fetchMeetingsWithDetails()
-  }, [currentPage, debouncedSearchQuery])
+  }, [currentPage, debouncedSearchQuery, familyId, authLoading])
 
   // 검색 기능
   useEffect(() => {
@@ -164,7 +171,8 @@ function MinutesListPageContent() {
   // 페이지네이션 계산
   const totalPages = Math.ceil(totalCount / itemsPerPage)
 
-  if (loading) return <div className="p-10 text-center text-slate-500">가족 회의록 불러오는 중...</div>
+  if (authLoading || loading) return <div className="p-10 text-center text-slate-500">가족 회의록 불러오는 중...</div>
+  if (!familyId) return <div className="p-10 text-center text-slate-500">가족 정보를 연결하는 중입니다...</div>
 
   return (
     <div className="p-4 pb-24">
