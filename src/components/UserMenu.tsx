@@ -20,8 +20,11 @@ export function UserMenu() {
   const [notice, setNotice] = useState('')
 
   const inviteMessage = useMemo(() => {
-    const loginUrl = typeof window !== 'undefined' ? `${window.location.origin}/login` : ''
-    return `${familyName || '우리 가족'} 초대 코드: ${inviteCode || '-'}\n${loginUrl}`
+    const loginUrl =
+      typeof window !== 'undefined'
+        ? `${window.location.origin}/login${inviteCode ? `?inviteCode=${encodeURIComponent(inviteCode)}` : ''}`
+        : ''
+    return `${familyName || '우리 가족'} 초대 링크\n${loginUrl}\n초대 코드: ${inviteCode || '-'}`
   }, [familyName, inviteCode])
 
   if (!user) {
@@ -100,23 +103,25 @@ export function UserMenu() {
     try {
       await ensureKakaoSdk()
 
+      const inviteLink = `${window.location.origin}/login?inviteCode=${encodeURIComponent(inviteCode)}`
+
       const payload = {
         objectType: 'feed',
         content: {
           title: '🏠 우리 가족 회의 초대',
-          description: `${familyName || '우리 가족'} 초대 코드: ${inviteCode}`,
+          description: `${familyName || '우리 가족'} 초대 링크입니다. 로그인하면 자동으로 가족에 연결돼요!`,
           imageUrl: `${window.location.origin}/icon.png`,
           link: {
-            mobileWebUrl: `${window.location.origin}/login`,
-            webUrl: `${window.location.origin}/login`,
+            mobileWebUrl: inviteLink,
+            webUrl: inviteLink,
           },
         },
         buttons: [
           {
-            title: '앱 열기',
+            title: '초대 링크 열기',
             link: {
-              mobileWebUrl: `${window.location.origin}/login`,
-              webUrl: `${window.location.origin}/login`,
+              mobileWebUrl: inviteLink,
+              webUrl: inviteLink,
             },
           },
         ],

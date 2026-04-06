@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { createUserProfile } from '@/lib/family-utils'
+import { createUserProfile, joinFamilyWithCode } from '@/lib/family-utils'
 import { FamilySetupModal } from '@/components/FamilySetupModal'
 import { useAuth } from '@/lib/auth-context'
 
@@ -14,8 +14,17 @@ export default function LoginPage() {
   const [showFamilySetup, setShowFamilySetup] = useState(false)
   const [newUserId, setNewUserId] = useState<string | null>(null)
   const [newUserDisplayName, setNewUserDisplayName] = useState('')
+  const [inviteCodeFromLink, setInviteCodeFromLink] = useState<string | null>(null)
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const inviteCode = new URLSearchParams(window.location.search)
+        .get('inviteCode')
+        ?.trim()
+        .toUpperCase()
+      setInviteCodeFromLink(inviteCode || null)
+    }
+
     const script = document.createElement('script')
     script.src = 'https://developers.kakao.com/sdk/js/kakao.min.js'
     script.async = true
@@ -115,6 +124,11 @@ export default function LoginPage() {
                 await createUserProfile(user.id, nickname, profileImage)
               }
 
+              const inviteCodeFromLink = new URLSearchParams(window.location.search)
+                .get('inviteCode')
+                ?.trim()
+                .toUpperCase()
+
               const { data: familyMember } = await supabase
                 .from('family_members')
                 .select('id')
@@ -123,7 +137,14 @@ export default function LoginPage() {
                 .maybeSingle()
 
               if (familyMember) {
+                await refreshFamilyInfo()
                 router.push('/minutes')
+                router.refresh()
+              } else if (inviteCodeFromLink) {
+                await joinFamilyWithCode(inviteCodeFromLink, user.id)
+                await refreshFamilyInfo()
+                router.push('/minutes')
+                router.refresh()
               } else {
                 setNewUserId(user.id)
                 setNewUserDisplayName(nickname)
@@ -207,8 +228,9 @@ export default function LoginPage() {
           )}
 
           <div className="mb-4 rounded-lg bg-yellow-50 border border-yellow-200 px-3 py-3 text-xs text-yellow-800 leading-5">
-            처음에 사용하시던 Kakao 로그인 흐름으로 복구했습니다.<br />
-            가족별 회의록 접근 제어는 그대로 유지됩니다.
+            {inviteCodeFromLink
+              ? `초대 링크가 확인되었습니다. 로그인 후 가족코드 ${inviteCodeFromLink}가 자동으로 연결됩니다.`
+              : '처음에 사용하시던 Kakao 로그인 흐름으로 복구했습니다. 가족별 회의록 접근 제어는 그대로 유지됩니다.'}
           </div>
         </div>
       </div>
