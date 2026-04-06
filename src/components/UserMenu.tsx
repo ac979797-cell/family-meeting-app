@@ -19,13 +19,17 @@ export function UserMenu() {
   const [showFamilyModal, setShowFamilyModal] = useState(false)
   const [notice, setNotice] = useState('')
 
+  const inviteLink = useMemo(() => {
+    if (typeof window === 'undefined' || !inviteCode) {
+      return ''
+    }
+
+    return `${window.location.origin}/login?inviteCode=${encodeURIComponent(inviteCode)}`
+  }, [inviteCode])
+
   const inviteMessage = useMemo(() => {
-    const loginUrl =
-      typeof window !== 'undefined'
-        ? `${window.location.origin}/login${inviteCode ? `?inviteCode=${encodeURIComponent(inviteCode)}` : ''}`
-        : ''
-    return `${familyName || '우리 가족'} 초대 링크\n${loginUrl}\n초대 코드: ${inviteCode || '-'}`
-  }, [familyName, inviteCode])
+    return `${familyName || '우리 가족'} 초대 링크\n${inviteLink || `${typeof window !== 'undefined' ? window.location.origin : ''}/login`}\n초대 코드: ${inviteCode || '-'}`
+  }, [familyName, inviteCode, inviteLink])
 
   if (!user) {
     return (
@@ -93,38 +97,50 @@ export function UserMenu() {
     setNotice('가족 코드가 복사되었습니다.')
   }
 
+  const handleCopyInviteLink = async () => {
+    if (!inviteLink) {
+      setNotice('먼저 가족 그룹을 생성하거나 참여해주세요.')
+      return
+    }
+
+    await navigator.clipboard.writeText(inviteLink)
+    setNotice('초대 링크가 복사되었습니다. 카카오톡에 바로 붙여넣으면 됩니다.')
+  }
+
   const handleShareKakao = async () => {
-    if (!inviteCode) {
+    if (!inviteCode || !inviteLink) {
       setNotice('먼저 가족 그룹을 생성해주세요.')
       setShowFamilyModal(true)
       return
     }
 
     try {
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: '우리 가족 회의 초대',
+            text: inviteMessage,
+            url: inviteLink,
+          })
+          setNotice('공유창을 열었습니다.')
+          return
+        } catch (shareError) {
+          if (shareError instanceof DOMException && shareError.name === 'AbortError') {
+            return
+          }
+        }
+      }
+
       await ensureKakaoSdk()
 
-      const inviteLink = `${window.location.origin}/login?inviteCode=${encodeURIComponent(inviteCode)}`
-
       const payload = {
-        objectType: 'feed',
-        content: {
-          title: '🏠 우리 가족 회의 초대',
-          description: `${familyName || '우리 가족'} 초대 링크입니다. 로그인하면 자동으로 가족에 연결돼요!`,
-          imageUrl: `${window.location.origin}/icon.png`,
-          link: {
-            mobileWebUrl: inviteLink,
-            webUrl: inviteLink,
-          },
+        objectType: 'text',
+        text: inviteMessage,
+        link: {
+          mobileWebUrl: inviteLink,
+          webUrl: inviteLink,
         },
-        buttons: [
-          {
-            title: '초대 링크 열기',
-            link: {
-              mobileWebUrl: inviteLink,
-              webUrl: inviteLink,
-            },
-          },
-        ],
+        buttonTitle: '초대 링크 열기',
       }
 
       if (window.Kakao.Share?.sendDefault) {
@@ -134,9 +150,11 @@ export function UserMenu() {
       } else {
         throw new Error('Kakao 공유 기능을 사용할 수 없습니다.')
       }
+
+      setNotice('카카오톡 공유창을 열었습니다.')
     } catch (error) {
       await navigator.clipboard.writeText(inviteMessage)
-      setNotice('카카오 공유 대신 초대 문구를 클립보드에 복사했습니다.')
+      setNotice('카카오 공유가 어려워서 초대 문구를 복사했습니다.')
     }
   }
 
@@ -201,12 +219,20 @@ export function UserMenu() {
                         복사
                       </button>
                     </div>
-                    <button
-                      onClick={handleShareKakao}
-                      className="w-full px-3 py-2 text-sm text-left rounded-lg bg-yellow-300 text-slate-900 font-medium hover:bg-yellow-400 transition-colors"
-                    >
-                      카카오톡으로 초대 보내기
-                    </button>
+                    <div className="grid gap-2">
+                      <button
+                        onClick={handleShareKakao}
+                        className="w-full px-3 py-2 text-sm text-left rounded-lg bg-yellow-300 text-slate-900 font-medium hover:bg-yellow-400 transition-colors"
+                      >
+                        카카오톡으로 초대 보내기
+                      </button>
+                      <button
+                        onClick={handleCopyInviteLink}
+                        className="w-full px-3 py-2 text-sm text-left rounded-lg border border-slate-200 text-slate-700 font-medium hover:bg-slate-50 transition-colors"
+                      >
+                        초대 링크 복사하기
+                      </button>
+                    </div>
                   </>
                 ) : (
                   <button
