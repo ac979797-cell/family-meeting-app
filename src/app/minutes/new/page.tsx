@@ -139,13 +139,17 @@ function NewMeetingPageContent() {
         }
         
         // 2. 파일명 생성 시 백틱(`) 사용 및 유니크한 이름 보장
-        const upfileName = `location_${Date.now()}`; 
-        
+        const upfileName = `location_${Date.now()}.jpg`; 
+        console.log('session', await supabase.auth.getSession());
+        console.log('bucket', 'meeting_locations', 'file', upfileName);
         const { error: uploadError } = await supabase.storage
           .from('meeting_locations')
           .upload(upfileName, uploadFile);
           
-        if (uploadError) throw uploadError;
+        if (uploadError) {
+          console.error('Upload error details:', uploadError);
+          throw uploadError;
+        }
         
         const { data } = supabase.storage.from('meeting_locations').getPublicUrl(upfileName);
         publicUrl = data.publicUrl;
@@ -189,7 +193,8 @@ function NewMeetingPageContent() {
           title: meetingDate + '_가족회의',
           category: "회의",
           start_at: meetingDate,
-          description: "자동 생성된 회의록 일정"
+          description: "자동 생성된 회의록 일정",
+          family_id: familyId,
         }
       ]);
 

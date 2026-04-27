@@ -5,17 +5,32 @@ import { supabase } from '../../../lib/supabase'
 import { useAuth } from '@/lib/auth-context'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 
+const getLocalDateKey = (value: string | Date) => {
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return value
+  }
+
+  const date = new Date(value)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 function MeetingDetailPageContent() {
   const { id } = useParams()
   const { familyId, loading: authLoading } = useAuth()
   const router = useRouter()
   const [meeting, setMeeting] = useState<any>(null)
   const [details, setDetails] = useState<any[]>([])
+  const [editableDetails, setEditableDetails] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [isEditMode, setIsEditMode] = useState(false)
+  const [isContentEditMode, setIsContentEditMode] = useState(false)
   const [newImageFile, setNewImageFile] = useState<File | null>(null)
   const [isCameraMode, setIsCameraMode] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isContentSaving, setIsContentSaving] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
@@ -105,6 +120,7 @@ function MeetingDetailPageContent() {
 
       setMeeting(meetingData)
       setDetails(detailsData || [])
+      setEditableDetails((detailsData || []).map((item) => ({ ...item })))
       setLoading(false)
     }
 
@@ -182,12 +198,15 @@ function MeetingDetailPageContent() {
       uploadFile = compressedBlob
       fileName = `compressed_${Date.now()}.jpg`
 
-      const upfileName = `location_${Date.now()}`
+      const upfileName = `location_${Date.now()}.jpg`
       const { error: uploadError } = await supabase.storage
         .from('meeting_locations')
         .upload(upfileName, uploadFile)
 
-      if (uploadError) throw uploadError
+      if (uploadError) {
+        console.error('Upload error details:', uploadError);
+        throw uploadError;
+      }
 
       const { data } = supabase.storage.from('meeting_locations').getPublicUrl(upfileName)
       const publicUrl = data.publicUrl
@@ -204,6 +223,8 @@ function MeetingDetailPageContent() {
         .eq('id', meetingId)
         .eq('family_id', familyId)
 
+      console.log('사진업데이트결과', {updateError, publicUrl, meetingId, familyId
+      })
       if (updateError) throw updateError
 
       // 상태 업데이트
@@ -222,10 +243,59 @@ function MeetingDetailPageContent() {
   if (authLoading || loading) return <div className="p-10 text-center">기록 읽어오는 중...</div>
   if (!meeting) return <div className="p-10 text-center">가족 회의록을 찾을 수 없습니다.</div>
 
+  const canEditMeetingContent = getLocalDateKey(meeting.meeting_date) === getLocalDateKey(new Date())
+
+  const handleContentChange = (detailId: string, nextValue: string) => {
+    setEditableDetails((prev) =>
+      prev.map((detail) => (detail.id === detailId ? { ...detail, content: nextValue } : detail))
+    )
+  }
+
+  const handleSaveContent = async () => {
+    if (!canEditMeetingContent) {
+      alert('회의록 내용은 회의 당일에만 수정할 수 있습니다.')
+      return
+    }
+
+    const changedItems = editableDetails.filter((item) => {
+      const original = details.find((detail) => detail.id === item.id)
+      return original?.content !== item.content
+    })
+
+    if (changedItems.length === 0) {
+      setIsContentEditMode(false)
+      return
+    }
+
+    setIsContentSaving(true)
+
+    try {
+      for (const item of changedItems) {
+        const { error } = await supabase
+          .from('meeting_details')
+          .update({ content: item.content })
+          .eq('id', item.id)
+          .eq('meeting_id', meeting.id)
+
+        if (error) throw error
+      }
+
+      setDetails(editableDetails.map((item) => ({ ...item })))
+      setIsContentEditMode(false)
+      alert('회의록 내용이 수정되었습니다!')
+    } catch (error: any) {
+      console.error(error)
+      alert('회의록 수정에 실패했습니다: ' + (error.message || '알 수 없는 오류'))
+    } finally {
+      setIsContentSaving(false)
+    }
+  }
+
   // 타입별로 데이터 분류하기
   const renderSection = (title: string, type: string, emoji: string) => {
-    const items = details.filter(d => d.item_type === type)
-    if (items.length === 0) return null; // 데이터 없으면 섹션 숨김
+    const source = isContentEditMode ? editableDetails : details
+    const items = source.filter(d => d.item_type === type)
+    if (items.length === 0) return null
 
     return (
       <div className="mb-8">
@@ -234,8 +304,18 @@ function MeetingDetailPageContent() {
         </h3>
         <ul className="space-y-2">
           {items.map((item: any, idx: number) => (
-            <li key={idx} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm text-slate-700">
-              {item.content}
+            <li key={item.id ?? idx} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm text-slate-700">
+              {isContentEditMode ? (
+                <textarea
+                  value={item.content || ''}
+                  onChange={(e) => handleContentChange(item.id, e.target.value)}
+                  rows={3}
+                  disabled={isContentSaving}
+                  className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              ) : (
+                item.content
+              )}
             </li>
           ))}
         </ul>
@@ -246,12 +326,23 @@ function MeetingDetailPageContent() {
   return (
     <div className="p-4 pb-20 max-w-md mx-auto">
       {/* 헤더 섹션 */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex items-start justify-between gap-3">
         <button onClick={() => router.back()} className="text-slate-400">← 뒤로가기</button>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
           <span className="text-sm font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
             {meeting.meeting_date} 회의
           </span>
+          {!isEditMode && !isContentEditMode && canEditMeetingContent && (
+            <button
+              onClick={() => {
+                setEditableDetails(details.map((item) => ({ ...item })))
+                setIsContentEditMode(true)
+              }}
+              className="text-sm font-bold text-amber-700 bg-amber-50 px-3 py-1 rounded-full"
+            >
+              📝 내용 수정
+            </button>
+          )}
           {!isEditMode && (
             <button
               onClick={() => setIsEditMode(true)}
@@ -262,6 +353,37 @@ function MeetingDetailPageContent() {
           )}
         </div>
       </div>
+
+      {!canEditMeetingContent && !isContentEditMode && (
+        <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+          회의록 내용 수정과 삭제는 회의 당일에만 가능합니다. 사진 수정은 지금처럼 언제든 할 수 있어요.
+        </div>
+      )}
+
+      {isContentEditMode && (
+        <div className="mb-6 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+          <p className="text-sm font-medium text-blue-700 mb-3">회의록 내용을 수정한 뒤 저장해주세요.</p>
+          <div className="flex gap-2">
+            <button
+              onClick={handleSaveContent}
+              disabled={isContentSaving}
+              className="flex-1 rounded-xl bg-blue-600 py-3 text-sm font-bold text-white disabled:bg-slate-400"
+            >
+              {isContentSaving ? '저장 중...' : '내용 저장'}
+            </button>
+            <button
+              onClick={() => {
+                setEditableDetails(details.map((item) => ({ ...item })))
+                setIsContentEditMode(false)
+              }}
+              disabled={isContentSaving}
+              className="flex-1 rounded-xl bg-slate-200 py-3 text-sm font-bold text-slate-700"
+            >
+              취소
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 장소 사진 */}
       <div className="mb-8">
@@ -367,10 +489,15 @@ function MeetingDetailPageContent() {
       {renderSection("그 외 이슈", "ETC", "💬")}
       {renderSection("구매 리스트", "SHOPPING", "🛒")}
 
-      {/* 삭제 버튼 (수정 모드가 아닐 때만) */}
-      {!isEditMode && (
+      {/* 삭제 버튼 (수정 모드가 아니고 당일 기록일 때만) */}
+      {!isEditMode && !isContentEditMode && canEditMeetingContent && (
         <button 
           onClick={async () => {
+            if (!canEditMeetingContent) {
+              alert('지난 회의는 삭제할 수 없습니다.')
+              return
+            }
+
             if(confirm('정말 삭제하시겠습니까?')) {
               const meetingId = Array.isArray(id) ? id[0] : id
 

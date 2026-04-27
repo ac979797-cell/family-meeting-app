@@ -31,11 +31,25 @@ CREATE TABLE IF NOT EXISTS profiles (
 -- 4. meetings 테이블에 family_id 추가 (기존 테이블 수정)
 ALTER TABLE meetings ADD COLUMN IF NOT EXISTS family_id uuid REFERENCES families(id) ON DELETE CASCADE;
 
+-- 4.5 schedules 테이블 생성
+CREATE TABLE IF NOT EXISTS schedules (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  title text NOT NULL,
+  category text,
+  start_at timestamp with time zone NOT NULL,
+  description text,
+  family_id uuid REFERENCES families(id) ON DELETE CASCADE,
+  created_by uuid REFERENCES auth.users(id),
+  created_at timestamp with time zone DEFAULT now()
+);
+ALTER TABLE schedules ADD COLUMN IF NOT EXISTS family_id uuid REFERENCES families(id) ON DELETE CASCADE;
+
 -- 5. RLS (Row Level Security) 정책 설정
 ALTER TABLE families ENABLE ROW LEVEL SECURITY;
 ALTER TABLE family_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE meetings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE schedules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE meeting_details ENABLE ROW LEVEL SECURITY;
 
 CREATE OR REPLACE FUNCTION public.is_family_member(target_family_id uuid)
@@ -84,6 +98,10 @@ DROP POLICY IF EXISTS "Users can view family meeting details" ON meeting_details
 DROP POLICY IF EXISTS "Users can insert family meeting details" ON meeting_details;
 DROP POLICY IF EXISTS "Users can update family meeting details" ON meeting_details;
 DROP POLICY IF EXISTS "Users can delete family meeting details" ON meeting_details;
+DROP POLICY IF EXISTS "Users can view family schedules" ON schedules;
+DROP POLICY IF EXISTS "Users can insert family schedules" ON schedules;
+DROP POLICY IF EXISTS "Users can update family schedules" ON schedules;
+DROP POLICY IF EXISTS "Users can delete family schedules" ON schedules;
 
 -- families 테이블: 자신의 가족만 조회
 CREATE POLICY "Users can view their families" ON families
@@ -170,6 +188,35 @@ CREATE POLICY "Users can delete their family meetings" ON meetings
 FOR DELETE TO authenticated
 USING (
   public.is_family_member(family_id)
+  AND meeting_date = CURRENT_DATE
+);
+
+-- schedules 테이블: 자신의 가족 일정만 조회/작성/수정/삭제
+CREATE POLICY "Users can view family schedules" ON schedules
+FOR SELECT TO authenticated
+USING (
+  public.is_family_member(family_id)
+);
+
+CREATE POLICY "Users can insert family schedules" ON schedules
+FOR INSERT TO authenticated
+WITH CHECK (
+  public.is_family_member(family_id)
+);
+
+CREATE POLICY "Users can update family schedules" ON schedules
+FOR UPDATE TO authenticated
+USING (
+  public.is_family_member(family_id)
+)
+WITH CHECK (
+  public.is_family_member(family_id)
+);
+
+CREATE POLICY "Users can delete family schedules" ON schedules
+FOR DELETE TO authenticated
+USING (
+  public.is_family_member(family_id)
 );
 
 -- meeting_details 테이블: 부모 회의의 family_id를 기준으로 접근 제어
@@ -203,6 +250,7 @@ USING (
     FROM meetings
     WHERE meetings.id = meeting_details.meeting_id
       AND public.is_family_member(meetings.family_id)
+      AND meetings.meeting_date = CURRENT_DATE
   )
 )
 WITH CHECK (
@@ -211,6 +259,7 @@ WITH CHECK (
     FROM meetings
     WHERE meetings.id = meeting_details.meeting_id
       AND public.is_family_member(meetings.family_id)
+      AND meetings.meeting_date = CURRENT_DATE
   )
 );
 
@@ -222,6 +271,7 @@ USING (
     FROM meetings
     WHERE meetings.id = meeting_details.meeting_id
       AND public.is_family_member(meetings.family_id)
+      AND meetings.meeting_date = CURRENT_DATE
   )
 );
 
@@ -243,4 +293,5 @@ USING (
 CREATE INDEX IF NOT EXISTS idx_family_members_user_id ON family_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_family_members_family_id ON family_members(family_id);
 CREATE INDEX IF NOT EXISTS idx_meetings_family_id ON meetings(family_id);
+CREATE INDEX IF NOT EXISTS idx_schedules_family_id ON schedules(family_id);
 CREATE INDEX IF NOT EXISTS idx_families_invite_code ON families(invite_code);

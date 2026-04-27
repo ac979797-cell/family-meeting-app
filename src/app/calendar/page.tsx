@@ -5,28 +5,47 @@ import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, isSa
     , isSameDay, addMonths, subMonths } from 'date-fns'
 import ScheduleModal from '../../components/ScheduleModal'
 import { supabase } from '../../lib/supabase'
-// 수정 후 git test
+
+type ScheduleItem = {
+  id?: string | number
+  title: string
+  category?: string | null
+  description?: string | null
+  start_at: string
+}
+
+const getCategoryClasses = (category?: string | null) => {
+  if (category?.includes('가족')) return 'bg-rose-100 text-rose-700'
+  if (category?.includes('외식')) return 'bg-orange-100 text-orange-700'
+  if (category?.includes('청소')) return 'bg-emerald-100 text-emerald-700'
+  if (category?.includes('여행')) return 'bg-sky-100 text-sky-700'
+  if (category?.includes('회의')) return 'bg-violet-100 text-violet-700'
+  return 'bg-slate-200 text-slate-700'
+}
 
 export default function CalendarPage() {
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [isModalOpen, setIsModalOpen] = useState(false)
-  
-  // 1. 일정 데이터를 담을 상태
-  const [schedules, setSchedules] = useState<any[]>([])
-  //const supabase = createClient()
+
+  const [schedules, setSchedules] = useState<ScheduleItem[]>([])
 
   // 2. Supabase에서 데이터 가져오는 함수
   const fetchSchedules = async () => {
     const { data, error } = await supabase
       .from('schedules')
       .select('*')
-    
+      .order('start_at', { ascending: true })
+
     if (error) {
       console.error('Error fetching schedules:', error)
     } else {
-      setSchedules(data || [])
+      setSchedules((data as ScheduleItem[]) || [])
     }
+  }
+
+  const getSchedulesForDate = (date: Date) => {
+    return schedules.filter((schedule) => isSameDay(new Date(schedule.start_at), date))
   }
 
   // 3. 페이지 로드 시 & 월 이동 시 데이터 새로고침
@@ -75,8 +94,7 @@ export default function CalendarPage() {
         const formattedDate = format(day, 'd')
         const cloneDay = day
 
-        // 4. 현재 날짜(day)에 해당하는 일정이 있는지 필터링
-        const daySchedules = schedules.filter(s => isSameDay(new Date(s.start_at), cloneDay))
+        const daySchedules = getSchedulesForDate(cloneDay)
 
         days.push(
           <div 
@@ -96,9 +114,9 @@ export default function CalendarPage() {
             {/* 5. 일정 목록 표시 (최대 2~3개) */}
             <div className="mt-1 flex flex-col gap-0.5 overflow-hidden">
               {daySchedules.slice(0, 3).map((sched, idx) => (
-                <div 
-                  key={idx} 
-                  className="text-[9px] px-1 py-0.5 rounded bg-blue-100 text-blue-700 font-medium truncate"
+                <div
+                  key={idx}
+                  className={`text-[9px] px-1 py-0.5 rounded font-medium truncate ${getCategoryClasses(sched.category)}`}
                 >
                   {sched.title}
                 </div>
@@ -124,10 +142,11 @@ export default function CalendarPage() {
       {renderCells()}
       
       {isModalOpen && (
-        <ScheduleModal 
-          selectedDate={selectedDate} 
+        <ScheduleModal
+          selectedDate={selectedDate}
+          daySchedules={getSchedulesForDate(selectedDate)}
           onClose={() => setIsModalOpen(false)}
-          onSave={fetchSchedules} // 6. 저장 완료 후 데이터 다시 불러오기
+          onSave={fetchSchedules}
         />
       )}
     </div>
