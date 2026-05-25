@@ -324,9 +324,9 @@ function MeetingDetailPageContent() {
   }
 
   return (
-    <div className="p-4 pb-20 max-w-md mx-auto">
+    <div className="p-4 pb-20 mx-auto w-full max-w-5xl">
       {/* 헤더 섹션 */}
-      <div className="mb-6 flex items-start justify-between gap-3">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <button onClick={() => router.back()} className="text-slate-400">← 뒤로가기</button>
         <div className="flex flex-wrap justify-end gap-2">
           <span className="text-sm font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">

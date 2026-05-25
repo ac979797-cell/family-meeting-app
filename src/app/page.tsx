@@ -12,7 +12,7 @@ export default function HomePage() {
           가족 회의를 위한 스마트한 회의록 관리 앱
         </p>
 
-        <div className="grid gap-4 max-w-sm mx-auto">
+        <div className="grid gap-4 max-w-lg sm:max-w-xl mx-auto">
           <Link
             href="/minutes"
             className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white py-4 px-6 rounded-2xl font-bold shadow-lg hover:shadow-xl transition-shadow"

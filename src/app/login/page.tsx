@@ -190,7 +190,7 @@ export default function LoginPage() {
       )}
 
       <div className="flex items-center justify-center min-h-screen p-4">
-        <div className="w-full max-w-sm">
+        <div className="w-full max-w-md sm:max-w-lg lg:max-w-xl">
           <div className="text-center mb-8">
             <h1 className="font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-purple-600 text-3xl mb-2">
               🏠 우리 가족 회의
