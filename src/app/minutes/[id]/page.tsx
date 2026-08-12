@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '@/lib/auth-context'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
+import { useUnsavedChanges } from '@/hooks/useUnsavedChanges'
 
 const getLocalDateKey = (value: string | Date) => {
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
@@ -33,6 +34,13 @@ function MeetingDetailPageContent() {
   const [isContentSaving, setIsContentSaving] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const hasUnsavedContentChanges = editableDetails.some((item) => {
+    const original = details.find((detail) => detail.id === item.id)
+    return original?.content !== item.content
+  })
+  const confirmDiscardChanges = useUnsavedChanges(
+    hasUnsavedContentChanges || newImageFile !== null
+  )
 
   // 이미지 압축 함수
   const compressImage = (file: File | Blob): Promise<Blob> => {
@@ -327,7 +335,14 @@ function MeetingDetailPageContent() {
     <div className="p-4 pb-20 mx-auto w-full max-w-5xl">
       {/* 헤더 섹션 */}
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <button onClick={() => router.back()} className="text-slate-400">← 뒤로가기</button>
+        <button
+          onClick={() => {
+            if (confirmDiscardChanges()) router.back()
+          }}
+          className="text-slate-400"
+        >
+          ← 뒤로가기
+        </button>
         <div className="flex flex-wrap justify-end gap-2">
           <span className="text-sm font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
             {meeting.meeting_date} 회의

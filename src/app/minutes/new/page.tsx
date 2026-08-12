@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '@/lib/auth-context'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
+import { useUnsavedChanges } from '@/hooks/useUnsavedChanges'
 
 function NewMeetingPageContent() {
   const router = useRouter()
@@ -19,8 +20,10 @@ function NewMeetingPageContent() {
   const [imgFile, setImgFile] = useState<File | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isCameraMode, setIsCameraMode] = useState(false)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  useUnsavedChanges(hasUnsavedChanges)
 
   // --- 1. 이전 데이터 로드 ---
   useEffect(() => {
@@ -96,6 +99,7 @@ function NewMeetingPageContent() {
           if (blob) {
             const file = new File([blob], `photo_${Date.now()}.jpg`, { type: 'image/jpeg' })
             setImgFile(file)
+            setHasUnsavedChanges(true)
             stopCamera()
           }
         }, 'image/jpeg', 0.8)
@@ -104,12 +108,19 @@ function NewMeetingPageContent() {
   }
 
   // --- 2. 로우 추가/삭제 핸들러 ---
-  const addRow = (setter: any, items: any) => setter([...items, { content: '' }])
-  const deleteRow = (setter: any, items: any, idx: number) => setter(items.filter((_: any, i: number) => i !== idx))
+  const addRow = (setter: any, items: any) => {
+    setter([...items, { content: '' }])
+    setHasUnsavedChanges(true)
+  }
+  const deleteRow = (setter: any, items: any, idx: number) => {
+    setter(items.filter((_: any, i: number) => i !== idx))
+    setHasUnsavedChanges(true)
+  }
   const updateContent = (setter: any, items: any, idx: number, value: string) => {
     const newItems = [...items];
     newItems[idx].content = value;
     setter(newItems);
+    setHasUnsavedChanges(true)
   }
 
   // --- 3. 저장(Submit) 로직 ---
@@ -203,6 +214,7 @@ function NewMeetingPageContent() {
       alert('가족 회의록이 저장되었습니다! 🏠');
       
       // 6. 페이지 이동 (window.location.href 대신 Next.js router 사용)
+      setHasUnsavedChanges(false)
       router.push('/minutes');
       router.refresh(); // 데이터 갱신 보장
 
@@ -239,7 +251,10 @@ function NewMeetingPageContent() {
         <input 
           type="date" 
           value={meetingDate} 
-          onChange={(e)=>setMeetingDate(e.target.value)} 
+          onChange={(e) => {
+            setMeetingDate(e.target.value)
+            setHasUnsavedChanges(true)
+          }}
           className="w-full border-slate-300 border p-3 rounded-xl bg-white text-black font-medium focus:ring-2 focus:ring-blue-500 outline-none"
         />
       </section>
@@ -305,7 +320,10 @@ function NewMeetingPageContent() {
             <input 
               type="file" 
               accept="image/*" 
-              onChange={(e) => setImgFile(e.target.files?.[0] || null)} 
+              onChange={(e) => {
+                setImgFile(e.target.files?.[0] || null)
+                setHasUnsavedChanges(true)
+              }}
               className="block w-full text-sm text-black file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" 
             />
 
