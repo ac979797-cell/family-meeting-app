@@ -7,11 +7,20 @@ const MESSAGE = '저장되지 않은 변경사항이 있습니다. 정말 뒤로
 /** 저장 전 변경이 있는 화면에서 이탈 전 확인을 받습니다. */
 export function useUnsavedChanges(hasUnsavedChanges: boolean) {
   const hasUnsavedChangesRef = useRef(hasUnsavedChanges)
-  const isRestoringHistoryRef = useRef(false)
+  const hasHistoryGuardRef = useRef(false)
+  const skipNextPopStateRef = useRef(false)
   const allowNavigationRef = useRef(false)
 
   useEffect(() => {
     hasUnsavedChangesRef.current = hasUnsavedChanges
+  }, [hasUnsavedChanges])
+
+  useEffect(() => {
+    if (!hasUnsavedChanges || hasHistoryGuardRef.current) return
+
+    // Android의 시스템 뒤로가기를 먼저 이 지점에서 멈춰 확인할 수 있게 합니다.
+    window.history.pushState({ unsavedChangesGuard: true }, '', window.location.href)
+    hasHistoryGuardRef.current = true
   }, [hasUnsavedChanges])
 
   useEffect(() => {
@@ -22,26 +31,29 @@ export function useUnsavedChanges(hasUnsavedChanges: boolean) {
     }
 
     const handlePopState = () => {
-      if (!hasUnsavedChangesRef.current) return
+      if (!hasHistoryGuardRef.current) return
 
-      if (allowNavigationRef.current) {
-        allowNavigationRef.current = false
+      if (skipNextPopStateRef.current) {
+        skipNextPopStateRef.current = false
         return
       }
 
-      if (isRestoringHistoryRef.current) {
-        isRestoringHistoryRef.current = false
+      if (!hasUnsavedChangesRef.current) {
+        skipNextPopStateRef.current = true
+        window.history.back()
         return
       }
 
       if (window.confirm(MESSAGE)) {
-        allowNavigationRef.current = true
+        // 시스템 뒤로가기는 보호용 히스토리 지점만 이동시켰으므로,
+        // 실제 이전 화면으로 한 번 더 이동합니다.
+        skipNextPopStateRef.current = true
+        window.history.back()
         return
       }
 
-      // 뒤로가기로 이동한 히스토리를 현재 페이지로 되돌립니다.
-      isRestoringHistoryRef.current = true
-      window.history.go(1)
+      // 취소하면 현재 화면을 다시 보호용 히스토리 지점으로 되돌립니다.
+      window.history.pushState({ unsavedChangesGuard: true }, '', window.location.href)
     }
 
     window.addEventListener('beforeunload', handleBeforeUnload)
@@ -85,7 +97,11 @@ export function useUnsavedChanges(hasUnsavedChanges: boolean) {
     if (!hasUnsavedChangesRef.current) return true
 
     const confirmed = window.confirm(MESSAGE)
-    if (confirmed) allowNavigationRef.current = true
+    if (confirmed) {
+      allowNavigationRef.current = true
+      // 화면 안의 router.back() 호출은 한 번의 뒤로가기만 허용합니다.
+      skipNextPopStateRef.current = true
+    }
     return confirmed
   }, [])
 }
